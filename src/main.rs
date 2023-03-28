@@ -6,7 +6,7 @@ use std::{
 
 use serde::Serialize;
 use warp::{
-    http::Method, http::StatusCode, reject::Reject, reply::with_status, Filter, Rejection, Reply,
+    http::Method, http::StatusCode, reject::Reject, reply::with_status, Filter, Rejection, Reply, cors::CorsForbidden,
 };
 
 #[derive(Debug, Serialize)]
@@ -79,13 +79,17 @@ async fn get_questions() -> Result<impl Reply, Rejection> {
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
     println!("{:?}", r);
-    if let Some(_invalid_id) = r.find::<InvalidId>() {
+    if let Some(error) = r.find::<CorsForbidden>() {
+        Ok(
+            with_status(error.to_string(), StatusCode::FORBIDDEN)
+        )
+    } else if let Some(InvalidId) = r.find() {
         Ok(with_status(
-            "No valid id presented",
+            "No valid id presented".to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
         ))
     } else {
-        Ok(with_status("Route not Found", StatusCode::NOT_FOUND))
+        Ok(with_status("Route not Found".to_string(), StatusCode::NOT_FOUND))
     }
 }
 
@@ -93,10 +97,8 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
 async fn main() {
     let cors = warp::cors()
         .allow_any_origin()
-        .allow_headers(vec![
-            "*",
-        ])
-        .allow_methods(vec![Method::PUT, Method::DELETE, Method::GET, Method::POST]);
+        .allow_header("content-type")
+        .allow_methods(&[Method::PUT, Method::DELETE, Method::GET, Method::POST]);
 
     let get_items = warp::get()
         .and(warp::path("questions"))
