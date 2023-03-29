@@ -1,6 +1,7 @@
-use std::{collections::HashMap, fmt::Display};
+use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 use warp::{
     cors::CorsForbidden, http::Method, http::StatusCode, reject::Reject, reply::with_status,
     Filter, Rejection, Reply,
@@ -56,39 +57,40 @@ impl Display for Question {
 
 #[derive(Clone)]
 struct Store {
-    questions: HashMap<QuestionId, Question>,
+    questions: Arc<RwLock<HashMap<QuestionId, Question>>>,
 }
 
 impl Store {
     fn new() -> Self {
         Store {
-            questions: HashMap::new(),
+            questions: Arc::new(RwLock::new(Self::init())),
         }
     }
 
-    fn init() -> Self {
+    fn init() -> HashMap<QuestionId, Question> {
         let file = include_str!("../question.json");
-        Store {
-            questions: serde_json::from_str(file).expect("can't read json file")
-        }
+        serde_json::from_str(file).expect("can't read json file")
     }
-    
 }
 
 async fn get_questions(
     params: HashMap<String, String>,
     store: Store,
 ) -> Result<impl Reply, Rejection> {
-    println!("{:?}", params);
     if !params.is_empty() {
         let pagination = extract_pagination(params)?;
-        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res: Vec<Question> = store.questions.read().await.values().cloned().collect();
         let res = &res[pagination.start..pagination.end];
         Ok(warp::reply::json(&res))
     } else {
-        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res: Vec<Question> = store.questions.read().await.values().cloned().collect();
         Ok(warp::reply::json(&res))
     }
+}
+
+async fn add_question(store: Store, question: Question) -> Result<impl Reply, Rejection> {
+    store.questions.write().await.insert(question.id.clone(), question);
+    Ok(warp::reply::with_status("Question added", StatusCode::OK))
 }
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
@@ -135,7 +137,7 @@ fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Err
 
 #[tokio::main]
 async fn main() {
-    let store = Store::init();
+    let store = Store::new();
     let store_filter = warp::any().map(move || store.clone());
 
     let cors = warp::cors()
@@ -143,15 +145,24 @@ async fn main() {
         .allow_header("content-type")
         .allow_methods(&[Method::PUT, Method::DELETE, Method::GET, Method::POST]);
 
-    let get_items = warp::get()
+    let get_questions = warp::get()
         .and(warp::path("questions"))
         .and(warp::path::end())
         .and(warp::query())
-        .and(store_filter)
-        .and_then(get_questions)
-        .recover(return_error);
+        .and(store_filter.clone())
+        .and_then(get_questions);
 
-    let routes = get_items.with(cors);
+    let add_question = warp::post()
+        .and(warp::path("questions"))
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and(warp::body::json())
+        .and_then(add_question);
+
+    let routes = get_questions
+        .or(add_question)
+        .with(cors)
+        .recover(return_error);
 
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
