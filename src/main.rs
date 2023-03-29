@@ -3,8 +3,8 @@ use std::{collections::HashMap, fmt::Display, sync::Arc};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use warp::{
-    cors::CorsForbidden, http::Method, http::StatusCode, reject::Reject, reply::with_status,
-    Filter, Rejection, Reply, body::BodyDeserializeError,
+    body::BodyDeserializeError, cors::CorsForbidden, http::Method, http::StatusCode,
+    reject::Reject, reply::with_status, Filter, Rejection, Reply,
 };
 
 #[derive(Debug)]
@@ -19,10 +19,10 @@ impl std::fmt::Display for Error {
         match *self {
             Error::ParseError(ref err) => {
                 write!(f, "cannot parse parameter: {}", err)
-            },
+            }
             Error::MissingParameters => {
                 write!(f, "missing parameter")
-            },
+            }
             Error::QuestionNotFound => {
                 write!(f, "question not found")
             }
@@ -39,6 +39,16 @@ impl Display for QuestionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+#[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
+struct AnswerId(String);
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct Answer {
+    id: AnswerId,
+    content: String,
+    question_id: QuestionId,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -62,12 +72,14 @@ impl Display for Question {
 #[derive(Clone)]
 struct Store {
     questions: Arc<RwLock<HashMap<QuestionId, Question>>>,
+    answers: Arc<RwLock<HashMap<AnswerId, Answer>>>,
 }
 
 impl Store {
     fn new() -> Self {
         Store {
             questions: Arc::new(RwLock::new(Self::init())),
+            answers: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -93,15 +105,23 @@ async fn get_questions(
 }
 
 async fn add_question(store: Store, question: Question) -> Result<impl Reply, Rejection> {
-    store.questions.write().await.insert(question.id.clone(), question);
+    store
+        .questions
+        .write()
+        .await
+        .insert(question.id.clone(), question);
     Ok(warp::reply::with_status("Question added", StatusCode::OK))
 }
 
 // pay attention!!! the signature need to follow this order!!! param, store, item to be updated
-async fn update_question(id: String, store: Store, question: Question) -> Result<impl Reply, Rejection> {
+async fn update_question(
+    id: String,
+    store: Store,
+    question: Question,
+) -> Result<impl Reply, Rejection> {
     match store.questions.write().await.get_mut(&QuestionId(id)) {
         Some(q) => *q = question,
-        None => return Err(warp::reject::custom(Error::QuestionNotFound))
+        None => return Err(warp::reject::custom(Error::QuestionNotFound)),
     }
 
     Ok(warp::reply::with_status("question updated", StatusCode::OK))
@@ -109,11 +129,30 @@ async fn update_question(id: String, store: Store, question: Question) -> Result
 
 async fn delete_question(id: String, store: Store) -> Result<impl Reply, Rejection> {
     match store.questions.write().await.remove(&QuestionId(id)) {
-        Some(_) => {
-            return Ok(warp::reply::with_status("question deleted", StatusCode::OK))
-        },
-        None => return Err(warp::reject::custom(Error::QuestionNotFound))
+        Some(_) => return Ok(warp::reply::with_status("question deleted", StatusCode::OK)),
+        None => return Err(warp::reject::custom(Error::QuestionNotFound)),
     }
+}
+
+async fn add_answer(
+    store: Store,
+    params: HashMap<String, String>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let answer = Answer {
+        id: AnswerId(params.get("id").unwrap().to_string()),
+        content: params.get("content").unwrap().to_string(),
+        question_id: QuestionId(params.get("questionId").unwrap().to_string()),
+    };
+
+    println!("{:?}", &answer);
+
+    store
+        .answers
+        .write()
+        .await
+        .insert(answer.id.clone(), answer);
+
+    Ok(warp::reply::with_status("Answer added", StatusCode::OK))
 }
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
@@ -202,10 +241,18 @@ async fn main() {
         .and(store_filter.clone())
         .and_then(delete_question);
 
+    let add_answer = warp::post()
+        .and(warp::path("answers"))
+        .and(warp::path::end())
+        .and(store_filter.clone())
+        .and(warp::body::form())
+        .and_then(add_answer);
+
     let routes = get_questions
         .or(add_question)
         .or(update_question)
         .or(delete_question)
+        .or(add_answer)
         .with(cors)
         .recover(return_error);
 
