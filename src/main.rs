@@ -1,15 +1,17 @@
 use std::{
+    collections::HashMap,
     fmt::Display,
     io::{Error, ErrorKind},
     str::FromStr,
 };
 
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use warp::{
-    http::Method, http::StatusCode, reject::Reject, reply::with_status, Filter, Rejection, Reply, cors::CorsForbidden,
+    cors::CorsForbidden, http::Method, http::StatusCode, reject::Reject, reply::with_status,
+    Filter, Rejection, Reply,
 };
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 struct QuestionId(String);
 
 impl Display for QuestionId {
@@ -29,7 +31,7 @@ impl FromStr for QuestionId {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Question {
     id: QuestionId,
     title: String,
@@ -63,6 +65,28 @@ struct InvalidId;
 
 impl Reject for InvalidId {}
 
+struct Store {
+    questions: HashMap<QuestionId, Question>,
+}
+
+impl Store {
+    fn new() -> Self {
+        Store {
+            questions: HashMap::new(),
+        }
+    }
+
+    // fn add_question(mut self, question: Question) -> Self {
+    //     self.questions.insert(question.id.clone(), question);
+    //     self
+    // }
+
+    fn init(self) -> HashMap<QuestionId, Question> {
+        let file = include_str!("../question.json");
+        serde_json::from_str(file).expect("can't read json file")
+    }
+}
+
 async fn get_questions() -> Result<impl Reply, Rejection> {
     let question = Question::new(
         QuestionId::from_str("1").expect("No id provided"),
@@ -80,16 +104,17 @@ async fn get_questions() -> Result<impl Reply, Rejection> {
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
     println!("{:?}", r);
     if let Some(error) = r.find::<CorsForbidden>() {
-        Ok(
-            with_status(error.to_string(), StatusCode::FORBIDDEN)
-        )
+        Ok(with_status(error.to_string(), StatusCode::FORBIDDEN))
     } else if let Some(InvalidId) = r.find() {
         Ok(with_status(
             "No valid id presented".to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
         ))
     } else {
-        Ok(with_status("Route not Found".to_string(), StatusCode::NOT_FOUND))
+        Ok(with_status(
+            "Route not Found".to_string(),
+            StatusCode::NOT_FOUND,
+        ))
     }
 }
 
