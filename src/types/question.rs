@@ -3,7 +3,7 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
-pub struct QuestionId(pub String);
+pub struct QuestionId(pub i32);
 
 impl Display for QuestionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -27,4 +27,11 @@ impl Display for Question {
             self.id, self.title, self.content, self.tags
         )
     }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct NewQuestion {
+    pub title: String,
+    pub content: String,
+    pub tags: Option<Vec<String>>,
 }
