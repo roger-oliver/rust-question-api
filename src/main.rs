@@ -3,6 +3,7 @@
 mod routes;
 mod store;
 mod types;
+mod services;
 
 use handle_errors::return_error;
 use routes::{
