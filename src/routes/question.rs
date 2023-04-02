@@ -10,7 +10,7 @@ use crate::{
     types::{
         pagination::{extract_pagination, Pagination},
         question::{NewQuestion, Question},
-    },
+    }, services::profanity::check_profanity,
 };
 
 #[instrument]
@@ -39,8 +39,28 @@ pub async fn add_question(
     store: Store,
     new_question: NewQuestion,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    match store.add_question(new_question).await {
-        Ok(_) => Ok(warp::reply::with_status("Question added", StatusCode::OK)),
+
+    let title = check_profanity(new_question.title);
+    let content = check_profanity(new_question.content);
+ 
+    let (title, content) = tokio::join!(title, content);
+ 
+    if title.is_err() {
+        return Err(warp::reject::custom(title.unwrap_err()));
+    }
+ 
+    if content.is_err() {
+        return Err(warp::reject::custom(content.unwrap_err()));
+    }
+
+    let question = NewQuestion {
+        title: title.unwrap(),
+        content: content.unwrap(),
+        tags: new_question.tags,
+    };
+
+    match store.add_question(question).await {
+        Ok(question) => Ok(warp::reply::json(&question)),
         Err(e) => Err(warp::reject::custom(e)),
     }
 }
@@ -51,6 +71,27 @@ pub async fn update_question(
     store: Store,
     question: Question,
 ) -> Result<impl warp::Reply, warp::Rejection> {
+
+    let title = check_profanity(question.title);
+    let content = check_profanity(question.content);
+ 
+    let (title, content) = tokio::join!(title, content);
+ 
+    if title.is_err() {
+        return Err(warp::reject::custom(title.unwrap_err()));
+    }
+ 
+    if content.is_err() {
+        return Err(warp::reject::custom(content.unwrap_err()));
+    }
+ 
+    let question = Question {
+        id: question.id,
+        title: title.unwrap(),
+        content: content.unwrap(),
+        tags: question.tags,
+    };
+        
     match store.update_question(question, id).await {
         Ok(res) => Ok(warp::reply::json(&res)),
         Err(e) => Err(warp::reject::custom(e)),

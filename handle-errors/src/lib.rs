@@ -1,16 +1,36 @@
+use tracing::{event, instrument, Level};
 use warp::{
     filters::{body::BodyDeserializeError, cors::CorsForbidden},
     http::StatusCode,
     reject::Reject,
     Rejection, Reply,
 };
-use tracing::{event, Level, instrument};
+
+use reqwest::Error as ReqwestError;
+use reqwest_middleware::Error as MiddlewareReqwestError;
+
+#[derive(Debug, Clone)]
+pub struct ApiLayerError {
+    pub status: u16,
+    pub message: String,
+}
 
 #[derive(Debug)]
 pub enum Error {
     ParseError(std::num::ParseIntError),
     MissingParameters,
     DatabaseQueryError,
+    ExternalApiError(ReqwestError),
+    ClientError(ApiLayerError),
+    ServerError(ApiLayerError),
+    ReqwestApiError(ReqwestError),
+    MiddlewareReqwestApiError(MiddlewareReqwestError),
+}
+
+impl std::fmt::Display for ApiLayerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Status {}, Message: {}", self.status, self.message)
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -19,11 +39,21 @@ impl std::fmt::Display for Error {
             Error::ParseError(ref err) => write!(f, "Cannot parse parameter: {}", err),
             Error::MissingParameters => write!(f, "Missing parameter"),
             Error::DatabaseQueryError => write!(f, "Cannot update, invalid data."),
+            Error::ExternalApiError(err) => write!(f, "API call cannot be executed: {}", err),
+            Error::ServerError(err) => write!(f, "External Server Error: {}", err),
+            Error::ClientError(err) => write!(f, "External Client Error: {}", err),
+            Error::ReqwestApiError(err) => {
+                write!(f, "External API error: {}", err)
+            }
+            Error::MiddlewareReqwestApiError(err) => {
+                write!(f, "External API error: {}", err)
+            }
         }
     }
 }
 
 impl Reject for Error {}
+impl Reject for ApiLayerError {}
 
 #[instrument]
 pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
@@ -32,6 +62,30 @@ pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
         Ok(warp::reply::with_status(
             crate::Error::DatabaseQueryError.to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
+        ))
+    } else if let Some(crate::Error::ClientError(e)) = r.find() {
+        event!(Level::ERROR, "{}", e);
+        Ok(warp::reply::with_status(
+            "Internal Server Error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ))
+    } else if let Some(crate::Error::ServerError(e)) = r.find() {
+        event!(Level::ERROR, "{}", e);
+        Ok(warp::reply::with_status(
+            "Internal Server Error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ))
+    } else if let Some(Error::ExternalApiError(e)) = r.find() {
+        event!(Level::ERROR, "{}", e);
+        Ok(warp::reply::with_status(
+            "internal server error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ))
+    } else if let Some(crate::Error::MiddlewareReqwestApiError(e)) = r.find() {
+        event!(Level::ERROR, "{}", e);
+        Ok(warp::reply::with_status(
+            "Internal Server Error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
         ))
     } else if let Some(error) = r.find::<CorsForbidden>() {
         event!(Level::ERROR, "CORS forbidden error: {}", error);
@@ -50,7 +104,7 @@ pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
         Ok(warp::reply::with_status(
             error.to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
-        )) 
+        ))
     } else {
         event!(Level::WARN, "Requested route was not found");
         Ok(warp::reply::with_status(
