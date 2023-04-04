@@ -5,6 +5,8 @@ mod services;
 mod store;
 mod types;
 
+use std::env;
+
 use clap::Parser;
 use handle_errors::return_error;
 use routes::{
@@ -38,7 +40,25 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), handle_errors::Error> {
+
+    dotenv::dotenv().ok();
+ 
+    if let Err(_) = env::var("BAD_WORDS_API_KEY") {
+        panic!("BadWords API key not set");
+    }
+ 
+    if let Err(_) = env::var("PASETO_KEY") {
+        panic!("PASETO key not set");
+    }
+ 
+    let port = std::env::var("PORT")
+        .ok()
+        .map(|val| val.parse::<u16>()) 
+        .unwrap_or(Ok(8080)) 
+        .map_err(|e| handle_errors::Error::ParseError(e)).unwrap(); 
+
+
     let args = Args::parse();
 
     let log_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| {
@@ -56,12 +76,14 @@ async fn main() {
         args.database_port,
         args.database_name
     ))
-    .await;
+    .await
+    .map_err(|e| handle_errors::Error::DatabaseQueryError(e))?;
 
     sqlx::migrate!()
-        .run(&store.clone().connection)
-        .await
-        .unwrap();
+        .run(&store.clone()
+        .connection).await.map_err(|e| { 
+            handle_errors::Error::MigrationError(e)
+         })?; 
 
     let store_filter = warp::any().map(move || store.clone());
 
@@ -152,5 +174,7 @@ async fn main() {
         .with(warp::trace::request())
         .recover(return_error);
 
-    warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
+    warp::serve(routes).run(([127, 0, 0, 1], port)).await;
+
+    Ok(())
 }

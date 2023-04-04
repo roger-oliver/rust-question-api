@@ -2,3 +2,4 @@
 stderr.log
 .vscode
 setup.toml
+.env
