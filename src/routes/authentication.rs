@@ -3,6 +3,7 @@ use std::future;
 use crate::{store::Store, types::account::{Account, AccountId, Session}};
 use argon2::Config;
 use chrono::Utc;
+use handle_errors::Error;
 use rand::Rng;
 use warp::{http::StatusCode, Filter};
 
@@ -35,11 +36,11 @@ pub async fn login(store: Store, login: Account) -> Result<impl warp::Reply, war
                         account.id.expect("id not found"),
                     )))
                 } else {
-                    Err(warp::reject::custom(handle_errors::Error::WrongPassword))
+                    Err(warp::reject::custom(Error::WrongPassword))
                 }
             }
             Err(e) => Err(warp::reject::custom(
-                handle_errors::Error::ArgonLibraryError(e),
+                Error::ArgonLibraryError(e),
             )),
         },
         Err(e) => Err(warp::reject::custom(e)),
@@ -65,28 +66,27 @@ fn issue_token(account_id: AccountId) -> String {
         .expect("Failed to construct paseto token w/ builder!")
 }
 
-pub fn verify_token(token: String) -> Result<Session, handle_errors::Error> {
+pub fn verify_token(token: String) -> Result<Session, Error> {
     let token = paseto::tokens::validate_local_token(
         &token,
         None,
     &"RANDOM WORDS WINTER MACINTOSH PC".as_bytes(),
     &paseto::tokens::TimeBackend::Chrono,
   )
-    .map_err(|_| handle_errors::Error::CannotDecryptToken)?;
+    .map_err(|_| Error::CannotDecryptToken)?;
  
     serde_json::from_value::<Session>(token).map_err(|_| {  
-        handle_errors::Error::CannotDecryptToken
+        Error::CannotDecryptToken
     })
 }
 
 pub fn auth() ->
     impl Filter<Extract = (Session,), Error = warp::Rejection> + Clone {
-    warp::header::<String>("Authorization").and_then(|token: String| {
-        let token = match verify_token(token) {
-            Ok(t) => t,
-            Err(_) => return future::ready(Err(warp::reject::reject())),
-        };
- 
-        future::ready(Ok(token))
-    })
+    warp::header::<String>("Authorization")
+        .and_then(|token: String| {
+            match verify_token(token) {
+                Ok(t) => return future::ready(Ok(t)),
+                Err(_) => return future::ready(Err(warp::reject::custom(Error::Unauthorized))),
+            };
+        })
 }

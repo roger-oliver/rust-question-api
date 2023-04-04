@@ -2,7 +2,7 @@ use tracing::{event, instrument, Level};
 use warp::{
     filters::{body::BodyDeserializeError, cors::CorsForbidden},
     http::StatusCode,
-    reject::Reject,
+    reject::{Reject, MissingHeader},
     Rejection, Reply,
 };
 
@@ -150,6 +150,9 @@ pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
             error.to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
         ))
+    } else if let Some(error) = r.find::<MissingHeader>() {
+        event!(Level::ERROR, "{}", error);
+        Ok(warp::reply::with_status(error.to_string(), StatusCode::BAD_REQUEST))
     } else {
         event!(Level::WARN, "Requested route was not found");
         Ok(warp::reply::with_status(
