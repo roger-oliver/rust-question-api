@@ -1,27 +1,69 @@
 #![warn(clippy::all)]
 
 mod routes;
+mod services;
 mod store;
 mod types;
-mod services;
 
+use clap::Parser;
+use config::Config;
 use handle_errors::return_error;
 use routes::{
     answer::add_answer,
-    question::{add_question, delete_question, get_questions, update_question}, authentication::auth,
+    authentication::auth,
+    question::{add_question, delete_question, get_questions, update_question},
 };
 use store::Store;
 use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{http::Method, Filter};
 
+#[derive(Parser, Debug, Default, serde::Deserialize, PartialEq)]
+struct Args {
+    log_level: String,
+    /// URL for the postgres database
+    database_host: String,
+    /// PORT number for the database connection
+    database_port: u16,
+    /// Database name
+    database_name: String,
+    /// Database user
+    database_user: String,
+    /// Database password
+    database_password: String,
+    /// Web server port
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() {
-    let log_filter = std::env::var("RUST_LOG")
-        .unwrap_or_else(|_| "practical_rust_book=info,warp=error".to_owned());
+    let config = Config::builder()
+        .add_source(config::File::with_name("setup"))
+        .build()
+        .unwrap();
 
-    let store = Store::new("postgres://postgres:postgres@localhost:5433/rustwebdev").await;
+    let config = config.try_deserialize::<Args>().unwrap();
 
-    sqlx::migrate!().run(&store.clone().connection).await.unwrap();
+    let log_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| {
+        format!(
+            "handle_errors={},rust_web_dev={},warp={}",
+            config.log_level, config.log_level, config.log_level
+        )
+    });
+
+    let store = Store::new(&format!(
+        "postgres://{}:{}@{}:{}/{}",
+        config.database_user,
+        config.database_password,
+        config.database_host,
+        config.database_port,
+        config.database_name
+    ))
+    .await;
+
+    sqlx::migrate!()
+        .run(&store.clone().connection)
+        .await
+        .unwrap();
 
     let store_filter = warp::any().map(move || store.clone());
 
@@ -109,7 +151,7 @@ async fn main() {
         .or(registration)
         .or(login)
         .with(cors)
-        .with(warp::trace::request()) 
+        .with(warp::trace::request())
         .recover(return_error);
 
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
