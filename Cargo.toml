@@ -3,6 +3,28 @@ name = "question-webapp"
 version = "0.1.0"
 edition = "2021"
 
+[profile.dev]
+opt-level = 0
+debug = true
+debug-assertions = true
+overflow-checks = true
+lto = false
+panic = 'unwind'
+incremental = true
+codegen-units = 256
+rpath = false
+
+[profile.release]
+opt-level = 3
+debug = false
+debug-assertions = false
+overflow-checks = false
+lto = false
+panic = 'unwind'
+incremental = false
+codegen-units = 16
+rpath = false
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -28,3 +50,4 @@ chrono = "0.4.19"
 clap = { version = "3.1.7", features = ["derive"] }
 proc-macro2 = "1.0.37"
 dotenv = "0.15.0"
+platforms = "2.0.0"
