@@ -4,77 +4,34 @@ mod routes;
 mod services;
 mod store;
 mod types;
+mod config;
 
-use std::env;
-
-use clap::Parser;
 use handle_errors::return_error;
 use routes::{
     answer::add_answer,
     authentication::auth,
     question::{add_question, delete_question, get_questions, update_question},
 };
-use store::Store;
 use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{http::Method, Filter};
 
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    /// Which errors we want to log (info, warn or error)
-    #[clap(short, long, default_value = "warn")]
-    log_level: String,
-    /// URL for the postgres database
-    #[clap(long, default_value = "localhost")] 
-    database_host: String,
-    /// PORT number for the database connection
-    #[clap(long, default_value = "5432")] 
-    database_port: u16,
-    /// Database name
-    #[clap(long, default_value = "rustwebdev")]
-    database_name: String,
-    #[clap(long, default_value = "postgres")]
-    database_user: String,
-    #[clap(long, default_value = "postgres")]
-    database_password: String,
-}
-
 #[tokio::main]
 async fn main() -> Result<(), handle_errors::Error> {
-
-    dotenv::dotenv().ok();
  
-    if let Err(_) = env::var("BAD_WORDS_API_KEY") {
-        panic!("BadWords API key not set");
-    }
+    let config = config::Config::new().expect("Config can't be set");
  
-    if let Err(_) = env::var("PASETO_KEY") {
-        panic!("PASETO key not set");
-    }
- 
-    let port = std::env::var("PORT")
-        .ok()
-        .map(|val| val.parse::<u16>()) 
-        .unwrap_or(Ok(8080)) 
-        .map_err(|e| handle_errors::Error::ParseError(e)).unwrap(); 
-
-
-    let args = Args::parse();
-
-    let log_filter = std::env::var("RUST_LOG").unwrap_or_else(|_| {
-        format!(
+    let log_filter = format!(
             "handle_errors={},rust_web_dev={},warp={}",
-            args.log_level, args.log_level, args.log_level
-        )
-    });
+            config.log_level, config.log_level, config.log_level
+        );
 
-    let store = Store::new(&format!(
+    let store = store::Store::new(&format!(
         "postgres://{}:{}@{}:{}/{}",
-        args.database_user,
-        args.database_password,
-        args.database_host,
-        args.database_port,
-        args.database_name
+        config.db_user, 
+        config.db_password, 
+        config.db_host, 
+        config.db_port, 
+        config.db_name
     ))
     .await
     .map_err(|e| handle_errors::Error::DatabaseQueryError(e))?;
@@ -174,9 +131,9 @@ async fn main() -> Result<(), handle_errors::Error> {
         .with(warp::trace::request())
         .recover(return_error);
 
-    // tracing::info!("Q&A service build ID {}", env!("RUST_WEB_DEV_VERSION"));
+    //  tracing::info!("Q&A service build ID {}", env!("RUST_WEB_DEV_VERSION"));
 
-    warp::serve(routes).run(([127, 0, 0, 1], port)).await;
+    warp::serve(routes).run(([127, 0, 0, 1], config.port)).await;
 
     Ok(())
 }

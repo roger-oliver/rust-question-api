@@ -3,28 +3,6 @@ name = "question-webapp"
 version = "0.1.0"
 edition = "2021"
 
-[profile.dev]
-opt-level = 0
-debug = true
-debug-assertions = true
-overflow-checks = true
-lto = false
-panic = 'unwind'
-incremental = true
-codegen-units = 256
-rpath = false
-
-[profile.release]
-opt-level = 3
-debug = false
-debug-assertions = false
-overflow-checks = false
-lto = false
-panic = 'unwind'
-incremental = false
-codegen-units = 16
-rpath = false
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -40,7 +18,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Formatted for print purposes; this has to be on one line
 # or it won't compile
 sqlx = {version = "0.5", features = [ "runtime-tokio-rustls", "migrate", "postgres" ]}
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots"] }
 reqwest-middleware = "0.1.1"
 reqwest-retry = "0.1.1"
 rand = "0.8"
@@ -50,4 +28,6 @@ chrono = "0.4.19"
 clap = { version = "3.1.7", features = ["derive"] }
 proc-macro2 = "1.0.37"
 dotenv = "0.15.0"
+
+[build-dependencies]
 platforms = "2.0.0"
