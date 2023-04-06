@@ -4,3 +4,4 @@ stderr.log
 setup.toml
 .env
 .env.docker.compose
+cert.pem

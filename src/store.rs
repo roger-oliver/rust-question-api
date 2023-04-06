@@ -16,8 +16,8 @@ impl Store {
         tracing::warn!("{}", db_url);
         let db_pool = PgPoolOptions::new()
             .max_connections(5)
-            .connect(db_url)
-            .await?;
+            .connect_lazy(db_url)
+            .expect("Failed to connect to Postgres.");
 
         Ok(Store {
             connection: db_pool,

@@ -50,7 +50,6 @@ impl Config {
 
         let db_user = env::var("POSTGRES_USER").unwrap_or(config.db_user.to_owned());
         let db_password = env::var("POSTGRES_PASSWORD").unwrap_or(config.db_password.to_owned());
-        println!("the dbPassword is {}", &db_password);
         let db_host = env::var("POSTGRES_HOST").unwrap_or(config.db_host.to_owned());
         let db_port = env::var("POSTGRES_PORT").unwrap_or(config.db_port.to_string());
         let db_name = env::var("POSTGRES_DB").unwrap_or(config.db_name.to_owned());

@@ -8,6 +8,8 @@ RUN rustup target add x86_64-unknown-linux-musl
 RUN apt install -y musl-tools musl-dev
 RUN apt install -y build-essential
 RUN apt install -y gcc-x86-64-linux-gnu
+# Install SSL certificates and dependencies for reqwest
+RUN apt-get update && apt-get install -y ca-certificates libssl-dev
 
 WORKDIR /app
 
@@ -28,5 +30,9 @@ WORKDIR /app
 
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/question-webapp ./
 COPY --from=builder /app/.env.docker.compose ./
+
+# Copy the root CA certificates bundle and set the SSL_CERT_FILE environment variable
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
 CMD ["/app/question-webapp"]
