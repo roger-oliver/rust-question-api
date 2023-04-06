@@ -1,3 +1,7 @@
 /target
 stderr.log
 .vscode
+setup.toml
+.env
+.env.docker.compose
+cert.pem

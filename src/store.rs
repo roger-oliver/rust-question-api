@@ -12,18 +12,16 @@ pub struct Store {
 }
 
 impl Store {
-    pub async fn new(db_url: &str) -> Self {
-        let db_pool = match PgPoolOptions::new()
+    pub async fn new(db_url: &str) -> Result<Self, sqlx::Error> {
+        tracing::warn!("{}", db_url);
+        let db_pool = PgPoolOptions::new()
             .max_connections(5)
-            .connect(db_url)
-            .await
-        {
-            Ok(pool) => pool,
-            Err(e) => panic!("could not connect to DB. {}", e),
-        };
-        Store {
+            .connect_lazy(db_url)
+            .expect("Failed to connect to Postgres.");
+
+        Ok(Store {
             connection: db_pool,
-        }
+        })
     }
 
     pub async fn get_questions(
@@ -51,7 +49,11 @@ impl Store {
         }
     }
 
-    pub async fn add_question(&self, new_question: NewQuestion, account_id: AccountId) -> Result<Question, Error> {
+    pub async fn add_question(
+        &self,
+        new_question: NewQuestion,
+        account_id: AccountId,
+    ) -> Result<Question, Error> {
         match sqlx::query(
             "INSERT INTO questions (title, content, tags, account_id)
                  VALUES ($1, $2, $3, $4)
@@ -124,19 +126,25 @@ impl Store {
         }
     }
 
-    pub async fn add_answer(&self, new_answer: NewAnswer, account_id: AccountId) -> Result<Answer, Error> {
-        match sqlx::query("INSERT INTO answers (content, question_id, account_id) 
-            VALUES ($1, $2, $3) returning id, content, question_id")
-            .bind(new_answer.content)
-            .bind(new_answer.question_id.0)
-            .bind(account_id.0)
-            .map(|row: PgRow| Answer {
-                id: AnswerId(row.get("id")),
-                content: row.get("content"),
-                question_id: QuestionId(row.get("question_id")),
-            })
-            .fetch_one(&self.connection)
-            .await
+    pub async fn add_answer(
+        &self,
+        new_answer: NewAnswer,
+        account_id: AccountId,
+    ) -> Result<Answer, Error> {
+        match sqlx::query(
+            "INSERT INTO answers (content, question_id, account_id) 
+            VALUES ($1, $2, $3) returning id, content, question_id",
+        )
+        .bind(new_answer.content)
+        .bind(new_answer.question_id.0)
+        .bind(account_id.0)
+        .map(|row: PgRow| Answer {
+            id: AnswerId(row.get("id")),
+            content: row.get("content"),
+            question_id: QuestionId(row.get("question_id")),
+        })
+        .fetch_one(&self.connection)
+        .await
         {
             Ok(answer) => Ok(answer),
             Err(e) => {
@@ -167,15 +175,8 @@ impl Store {
                         .unwrap()
                         .parse::<i32>()
                         .unwrap(),
-                    db_message = error
-                        .as_database_error()
-                        .unwrap()
-                        .message(),
-                    constraint = error
-                        .as_database_error()
-                        .unwrap()
-                        .constraint()
-                        .unwrap()
+                    db_message = error.as_database_error().unwrap().message(),
+                    constraint = error.as_database_error().unwrap().constraint().unwrap()
                 );
                 Err(Error::DatabaseQueryError(error))
             }
@@ -191,7 +192,7 @@ impl Store {
                 password: row.get("password"),
             })
             .fetch_one(&self.connection)
-                .await
+            .await
         {
             Ok(account) => Ok(account),
             Err(error) => {
@@ -206,13 +207,11 @@ impl Store {
         question_id: i32,
         account_id: &AccountId,
     ) -> Result<bool, Error> {
-        match sqlx::query(
-            "SELECT * from questions where id = $1 and account_id = $2"
-        )
-        .bind(question_id)
-        .bind(account_id.0)
-        .fetch_optional(&self.connection)
-        .await
+        match sqlx::query("SELECT * from questions where id = $1 and account_id = $2")
+            .bind(question_id)
+            .bind(account_id.0)
+            .fetch_optional(&self.connection)
+            .await
         {
             Ok(question) => Ok(question.is_some()),
             Err(e) => {
@@ -221,5 +220,4 @@ impl Store {
             }
         }
     }
-
 }

@@ -23,6 +23,7 @@ pub enum Error {
     WrongPassword,
     ArgonLibraryError(ArgonError),
     DatabaseQueryError(sqlx::Error),
+    MigrationError(sqlx::migrate::MigrateError),
     CannotDecryptToken,
     Unauthorized,
     ExternalApiError(ReqwestError),
@@ -50,6 +51,7 @@ impl std::fmt::Display for Error {
                 write!(f, "Cannot verifiy password")
             }
             Error::DatabaseQueryError(_) => write!(f, "Cannot update, invalid data."),
+            Error::MigrationError(_) => write!(f, "Cannot migrate data"),
             Error::CannotDecryptToken => write!(f, "Cannot decrypt error"),
             Error::Unauthorized => write!(
                 f, 
