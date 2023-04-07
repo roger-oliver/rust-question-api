@@ -1475,33 +1475,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "question-webapp"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "clap",
- "dotenv",
- "handle-errors",
- "openssl",
- "paseto",
- "platforms",
- "proc-macro2",
- "rand",
- "reqwest",
- "reqwest-middleware",
- "reqwest-retry",
- "rust-argon2",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
- "warp",
-]
-
-[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1700,6 +1673,33 @@ dependencies = [
  "blake2b_simd",
  "constant_time_eq 0.1.5",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "rust-question-api"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "clap",
+ "dotenv",
+ "handle-errors",
+ "openssl",
+ "paseto",
+ "platforms",
+ "proc-macro2",
+ "rand",
+ "reqwest",
+ "reqwest-middleware",
+ "reqwest-retry",
+ "rust-argon2",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "warp",
 ]
 
 [[package]]
