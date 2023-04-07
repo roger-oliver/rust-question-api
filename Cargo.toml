@@ -1,5 +1,5 @@
 [package]
-name = "question-webapp"
+name = "rust-question-api"
 version = "0.1.0"
 edition = "2021"
 

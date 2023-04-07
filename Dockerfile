@@ -28,11 +28,11 @@ FROM scratch
 
 WORKDIR /app
 
-COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/question-webapp ./
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/rust-question-api ./
 COPY --from=builder /app/.env.docker.compose ./
 
 # Copy the root CA certificates bundle and set the SSL_CERT_FILE environment variable
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 ENV SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
 
-CMD ["/app/question-webapp"]
+CMD ["/app/rust-question-api"]
