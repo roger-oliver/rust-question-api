@@ -28,17 +28,17 @@ pub struct BadWordsResponse {
 }
 
 pub async fn check_profanity(content: String) -> Result<String, handle_errors::Error> {
-
     // We are already checking if the ENV VARIABLE is set inside main.rs, 
     // so safe to unwrap here
-    let api_key = env::var("BAD_WORDS_API_KEY").unwrap();
+    let api_key = env::var("BAD_WORDS_API_KEY").expect("API KEY NOT SET");
+    let api_service_url = env::var("API_SERVICE_URL").expect("API SERVICE URL NOT SET");
 
     let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
     let client = ClientBuilder::new(reqwest::Client::new())
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))
         .build();
     let res = client
-        .post("https://api.apilayer.com/bad_words?censor_character=*")
+        .post(format!("{}/bad_words?censor_character=*", api_service_url))
         .header("apikey", api_key)
         .body(content)
         .send()
@@ -65,5 +65,45 @@ async fn transform_error(res: reqwest::Response) -> handle_errors::ApiLayerError
     handle_errors::ApiLayerError {
         status: res.status().as_u16(),
         message: res.json::<APIResponse>().await.unwrap().message,
+    }
+}
+
+#[cfg(test)]
+mod profanity_tests {
+    use super::{check_profanity, env};
+
+    use mock_server::{MockServer, OneshotHandler};
+
+    #[tokio::test]
+    async fn run() {
+        let handler = run_mock();
+        censor_profane_words().await;
+        no_profane_words().await;
+        let _ = handler.sender.send(1);
+    }
+
+    fn run_mock() -> OneshotHandler {
+        env::set_var("API_SERVICE_URL", "http://localhost:8081");
+        env::set_var("BAD_WORDS_API_KEY", "YES");
+
+        let socket = "127.0.0.1:8081"
+            .to_string()
+            .parse()
+            .expect("Not a valid address");
+        let mock = MockServer::new(socket);
+
+        mock.oneshot()
+    }
+
+    async fn censor_profane_words() {
+        let content = "quite a dick!".to_string();
+        let censored_content = check_profanity(content).await;
+        assert_eq!(censored_content.unwrap(), "quite a ****!");
+    }
+
+    async fn no_profane_words() {
+        let content = "some sentence".to_string();
+        let censored_content = check_profanity(content).await;
+        assert_eq!(censored_content.unwrap(), "");
     }
 }
