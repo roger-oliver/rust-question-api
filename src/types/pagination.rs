@@ -4,7 +4,7 @@ use handle_errors::Error;
 
 /// Pagination struct which is getting extract
 /// from query params
-#[derive(Default, Debug)]
+#[derive(Default, Debug, PartialEq)]
 pub struct Pagination {
     /// The index of the last item which has to be returned
     pub limit: Option<u32>,
@@ -20,11 +20,12 @@ pub struct Pagination {
 /// # Example usage
 /// ```rust
 /// use std::collections::HashMap;
-///
+/// use rust_question_api::types::pagination::extract_pagination;
+/// 
 /// let mut query = HashMap::new();
 /// query.insert("limit".to_string(), "1".to_string());
 /// query.insert("offset".to_string(), "10".to_string());
-/// let p = pagination::extract_pagination(query).unwrap();
+/// let p = extract_pagination(query).unwrap();
 /// assert_eq!(p.limit, Some(1));
 /// assert_eq!(p.offset, 10);
 /// ```
@@ -52,4 +53,40 @@ pub fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination,
     }
 
     Err(Error::MissingParameters)
+}
+
+#[cfg(test)]
+mod pagination_tests {
+    use super::{extract_pagination, HashMap, Pagination, Error};
+
+    #[test]
+    fn valid_pagination() {
+        let mut params = HashMap::new();
+        params.insert(String::from("limit"), String::from("1"));
+        params.insert(String::from("offset"), String::from("1"));
+        let pagination_result = extract_pagination(params);
+        let expected = Pagination {
+            limit: Some(1),
+            offset: 1,
+        };
+        assert_eq!(pagination_result.unwrap(), expected);
+    }
+
+    #[test]
+    fn missing_offset_parameter() {
+        let mut params = HashMap::new();
+        params.insert(String::from("limit"), String::from("1"));
+
+        let pagination_result = format!(
+            "{}",
+            extract_pagination(params).unwrap_err()
+        );
+
+        let expected = format!("{}", Error::MissingParameters);
+
+        assert_eq!(pagination_result, expected);
+    }
+
+
+    
 }
