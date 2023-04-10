@@ -16,7 +16,7 @@ pub struct OneshotHandler {
     pub sender: Sender<i32>,
 }
 
-async fn build_routes(store: store::Store) -> impl Filter<Extract = impl Reply> + Clone {
+async fn build_routes(store: store::Store) -> impl Filter<Extract = (impl Reply,)> + Clone {
     let store_filter = warp::any().map(move || store.clone());
 
     let cors = warp::cors()

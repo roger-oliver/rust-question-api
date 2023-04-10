@@ -24,7 +24,7 @@ pub async fn register(store: Store, account: Account) -> Result<impl warp::Reply
     }
 }
 
-pub fn hash_password(password: &[u8]) -> String {
+fn hash_password(password: &[u8]) -> String {
     let salt = rand::thread_rng().gen::<[u8; 32]>();
     let config = Config::default();
     argon2::hash_encoded(password, &salt, &config).unwrap()
@@ -66,7 +66,7 @@ fn issue_token(account_id: AccountId) -> String {
         .expect("Failed to construct paseto token w/ builder!")
 }
 
-pub fn verify_token(token: String) -> Result<Session, Error> {
+fn verify_token(token: String) -> Result<Session, Error> {
     let key = env::var("PASETO_KEY").unwrap();
     let token = paseto::tokens::validate_local_token(
         &token,
