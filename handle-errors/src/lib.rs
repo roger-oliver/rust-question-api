@@ -83,7 +83,7 @@ pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
             sqlx::Error::Database(err) => {
                 if err.code().unwrap().parse::<u32>().unwrap() == DUPLICATE_KEY {
                     Ok(warp::reply::with_status(
-                        "Account already exsists".to_string(),
+                        "Account already exists".to_string(),
                         StatusCode::UNPROCESSABLE_ENTITY,
                     ))
                 } else {
